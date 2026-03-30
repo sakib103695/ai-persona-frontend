@@ -1,11 +1,12 @@
 import type { NextConfig } from 'next'
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
+
 const nextConfig: NextConfig = {
   output: 'standalone',
-  rewrites: async () =>
-    process.env.NODE_ENV === 'development'
-      ? [{ source: '/api/:path*', destination: 'http://localhost:4000/api/:path*' }]
-      : [],
+  rewrites: async () => [
+    { source: '/api/:path*', destination: `${apiUrl}/api/:path*` },
+  ],
 }
 
 export default nextConfig
