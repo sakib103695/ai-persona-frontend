@@ -49,9 +49,10 @@ interface Props {
   onImport: () => void
   activeTags: string[]
   onTagsChange: (tags: string[]) => void
+  locked?: boolean
 }
 
-export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeTags, onTagsChange }: Props) {
+export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeTags, onTagsChange, locked }: Props) {
   const allTags = useMemo(() => getAllTags(personas), [personas])
 
   const filtered = useMemo(() => {
@@ -117,6 +118,11 @@ export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeT
       </div>
 
       {/* Section label */}
+      {locked && (
+        <p className="px-4 mb-2 text-[10px] font-semibold text-amber-400">
+          Start a New Chat to change personas
+        </p>
+      )}
       <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
         {activeTags.length > 0
           ? `${filtered.length} matching persona${filtered.length !== 1 ? 's' : ''}`
@@ -143,13 +149,13 @@ export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeT
           return (
             <button
               key={persona.id}
-              onClick={() => isReady && onToggle(persona.id)}
-              disabled={!isReady}
+              onClick={() => isReady && !locked && onToggle(persona.id)}
+              disabled={!isReady || locked}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
                 selected
                   ? 'bg-indigo-600/10'
-                  : 'hover:bg-slate-800/50'
-              } ${!isReady ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  : locked ? '' : 'hover:bg-slate-800/50'
+              } ${(!isReady || locked) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               style={selected ? { borderRight: `2px solid ${color}` } : {}}
             >
               {/* Avatar */}

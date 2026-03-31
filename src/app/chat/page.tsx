@@ -320,6 +320,7 @@ function ChatPageInner() {
         onImport={() => setShowImport(true)}
         activeTags={activeTags}
         onTagsChange={setActiveTags}
+        locked={messages.length > 0}
       />
 
       {/* ── Center: Chat Canvas ────────────────────────────────────── */}
