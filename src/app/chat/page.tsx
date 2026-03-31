@@ -177,13 +177,18 @@ function ChatPageInner() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // When persona selection changes, invalidate the session so a new one is created
+  // When persona selection changes, start a fresh conversation
   const handleTogglePersona = useCallback((id: string) => {
     setScopedSourceIds([])
     setSessionId(null)
+    setMessages([])
+    setActiveSources([])
+    setActiveCitationIdx(null)
+    setStreamingContent('')
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
     )
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
 
