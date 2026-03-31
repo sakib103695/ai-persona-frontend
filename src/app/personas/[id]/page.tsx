@@ -55,6 +55,7 @@ const STATUS_CONFIG: Record<
   transcribed: { label: "Transcribed", dot: "#6366f1", textClass: "text-indigo-600", bgClass: "bg-indigo-50" },
   processing: { label: "Processing", dot: "#f59e0b", textClass: "text-amber-600", bgClass: "bg-amber-50" },
   queued: { label: "Queued", dot: "#94a3b8", textClass: "text-slate-500", bgClass: "bg-slate-100" },
+  listed: { label: "Available", dot: "#cbd5e1", textClass: "text-slate-400", bgClass: "bg-slate-50" },
   failed: { label: "Failed", dot: "#f43f5e", textClass: "text-rose-600", bgClass: "bg-rose-50" },
 };
 
