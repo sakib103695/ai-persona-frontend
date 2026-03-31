@@ -1,8 +1,6 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import { ChatSidebar } from '@/components/chat/ChatSidebar'
@@ -102,6 +100,14 @@ function renderCitations(
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageInner />
+    </Suspense>
+  )
+}
+
+function ChatPageInner() {
   const searchParams = useSearchParams()
   const [personas, setPersonas] = useState<Persona[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
