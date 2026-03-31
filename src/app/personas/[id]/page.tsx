@@ -482,6 +482,15 @@ export default function PersonaDetailPage() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {(persona.status === "processing" || filterCounts.processing > 0) && (
+                <button
+                  onClick={() => setShowProgress(true)}
+                  className="flex items-center gap-1.5 bg-amber-50 text-amber-700 text-sm font-bold px-4 py-2 rounded-xl border border-amber-200 hover:bg-amber-100 transition-colors"
+                >
+                  <span className="material-symbols-rounded text-base animate-spin" style={{ animationDuration: '2s' }}>sync</span>
+                  Progress
+                </button>
+              )}
               <Link
                 href={`/chat?persona=${persona.id}`}
                 className="flex items-center gap-1.5 brand-gradient text-white text-sm font-bold px-4 py-2 rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"

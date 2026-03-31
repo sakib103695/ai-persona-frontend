@@ -67,9 +67,10 @@ export function ImportModal({ onClose, viewPersonaId }: Props) {
         if (!res.ok) return
         const data: ImportStatus = await res.json()
         setStatus(data)
-        // Detect completion: all sources processed and we're past chunking stage
+        // Detect completion: all active sources processed (must have had at least 1 completed)
         if (
           data.total_videos > 0 &&
+          data.completed + data.failed > 0 &&
           data.queued === 0 &&
           data.transcribing === 0 &&
           data.chunking === 0
