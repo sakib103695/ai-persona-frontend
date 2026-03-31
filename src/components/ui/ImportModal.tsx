@@ -69,10 +69,10 @@ export function ImportModal({ onClose, viewPersonaId, addToPersonaId }: Props) {
         if (!res.ok) return
         const data: ImportStatus = await res.json()
         setStatus(data)
-        // Detect completion: all active sources processed (must have had at least 1 completed)
+        // Detect completion: all active sources processed (completed includes done + failed)
         if (
           data.total_videos > 0 &&
-          data.completed + data.failed > 0 &&
+          data.completed > 0 &&
           data.queued === 0 &&
           data.transcribing === 0 &&
           data.chunking === 0
@@ -293,7 +293,7 @@ export function ImportModal({ onClose, viewPersonaId, addToPersonaId }: Props) {
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <span className="text-slate-500 font-medium">
-                        {status.completed} / {status.total_videos} complete
+                        {status.completed} / {status.total_videos} processed{status.failed > 0 ? ` (${status.failed} failed)` : ''}
                       </span>
                       <span className="text-indigo-600 font-bold">{status.percent}%</span>
                     </div>
@@ -330,9 +330,6 @@ export function ImportModal({ onClose, viewPersonaId, addToPersonaId }: Props) {
                   {/* Stats */}
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span>{status.total_words_extracted.toLocaleString()} words extracted</span>
-                    {status.failed > 0 && (
-                      <span className="text-rose-500 font-medium">{status.failed} failed</span>
-                    )}
                   </div>
                 </>
               )}
