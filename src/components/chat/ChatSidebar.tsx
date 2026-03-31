@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { Persona } from '@/app/chat/page'
+import { TagSearchInput } from '@/components/ui/TagSearchInput'
 
 const PERSONA_COLORS = [
   '#6366f1', '#10b981', '#ec4899', '#f97316',
@@ -16,7 +17,6 @@ const NAV_ITEMS = [
   { href: '/settings',  label: 'Settings', icon: 'settings' },
 ]
 
-// Collect all unique tags across personas
 function getAllTags(personas: Persona[]) {
   const counts: Record<string, number> = {}
   for (const p of personas) {
@@ -26,8 +26,11 @@ function getAllTags(personas: Persona[]) {
   }
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
     .map(([tag]) => tag)
+}
+
+function normalizeTag(tag: string) {
+  return tag.replace(/-/g, ' ').toLowerCase()
 }
 
 function avatarInitials(name: string) {
@@ -44,37 +47,19 @@ interface Props {
   selectedIds: string[]
   onToggle: (id: string) => void
   onImport: () => void
+  activeTags: string[]
+  onTagsChange: (tags: string[]) => void
 }
 
-export function ChatSidebar({ personas, selectedIds, onToggle, onImport }: Props) {
-  const [search, setSearch] = useState('')
-  const [activeTags, setActiveTags] = useState<string[]>([])
-
+export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeTags, onTagsChange }: Props) {
   const allTags = useMemo(() => getAllTags(personas), [personas])
 
   const filtered = useMemo(() => {
-    let list = personas
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.tags ?? []).some((t) => t.includes(q)),
-      )
-    }
-    if (activeTags.length > 0) {
-      list = list.filter((p) =>
-        activeTags.every((t) => (p.tags ?? []).includes(t)),
-      )
-    }
-    return list
-  }, [personas, search, activeTags])
-
-  function toggleTag(tag: string) {
-    setActiveTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    if (activeTags.length === 0) return personas
+    return personas.filter((p) =>
+      activeTags.every((t) => (p.tags ?? []).includes(t)),
     )
-  }
+  }, [personas, activeTags])
 
   return (
     <aside className="w-72 h-full sidebar-bg flex flex-col shrink-0">
@@ -117,42 +102,22 @@ export function ChatSidebar({ personas, selectedIds, onToggle, onImport }: Props
       {/* Divider */}
       <div className="mx-4 my-3 border-t border-slate-800/60" />
 
-      {/* Persona search */}
-      <div className="px-3 mb-2">
-        <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2">
-          <span className="material-symbols-rounded text-slate-500 text-base shrink-0">search</span>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search personas..."
-            className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none"
-          />
-        </div>
+      {/* Tag search */}
+      <div className="px-3 mb-3">
+        <TagSearchInput
+          allTags={allTags}
+          selectedTags={activeTags}
+          onTagsChange={onTagsChange}
+          placeholder="Search by topic..."
+          darkMode
+        />
       </div>
-
-      {/* Topic tags */}
-      {allTags.length > 0 && (
-        <div className="px-3 mb-3 flex flex-wrap gap-1.5">
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
-                activeTags.includes(tag)
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Section label */}
       <p className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
-        My Personas
+        {activeTags.length > 0
+          ? `${filtered.length} matching persona${filtered.length !== 1 ? 's' : ''}`
+          : 'My Personas'}
       </p>
 
       {/* Persona list */}
@@ -204,7 +169,6 @@ export function ChatSidebar({ personas, selectedIds, onToggle, onImport }: Props
                     avatarInitials(persona.name)
                   )}
                 </div>
-                {/* Status dot */}
                 <span
                   className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#181a2b]"
                   style={{

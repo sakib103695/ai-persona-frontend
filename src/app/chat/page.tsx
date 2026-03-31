@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
+import ReactMarkdown from 'react-markdown'
 import { ChatSidebar } from '@/components/chat/ChatSidebar'
 import { SourcesPanel } from '@/components/chat/SourcesPanel'
 import { ImportModal } from '@/components/ui/ImportModal'
@@ -98,8 +100,11 @@ function renderCitations(
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
+  const searchParams = useSearchParams()
   const [personas, setPersonas] = useState<Persona[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [activeTags, setActiveTags] = useState<string[]>([])
+  const [scopedSourceIds, setScopedSourceIds] = useState<string[]>([])
   const [mode, setMode] = useState<Mode>('learn')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -109,37 +114,86 @@ export default function ChatPage() {
   const [activeCitationIdx, setActiveCitationIdx] = useState<number | null>(null)
   const [input, setInput] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Fetch personas on mount
+  const STORAGE_KEY = 'chat_last_session'
+
+  // Restore last session from localStorage on mount, then apply URL params
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const { sessionId: sid, messages: msgs, selectedIds: sids, mode: m } = JSON.parse(saved)
+        if (sid && msgs?.length) {
+          setSessionId(sid)
+          setMessages(msgs)
+          if (sids?.length) setSelectedIds(sids)
+          if (m) setMode(m)
+        }
+      }
+    } catch {}
+
     fetch('/api/personas')
       .then((r) => r.json())
-      .then(setPersonas)
+      .then((data: Persona[]) => {
+        setPersonas(data)
+        // URL params start a fresh scoped session — override restored state
+        const personaParam = searchParams.get('persona')
+        const sourcesParam = searchParams.get('sources')
+        if (personaParam) {
+          setSelectedIds([personaParam])
+          setScopedSourceIds(sourcesParam ? sourcesParam.split(',').filter(Boolean) : [])
+          // fresh session for a scoped chat
+          setSessionId(null)
+          setMessages([])
+          setActiveSources([])
+        }
+      })
       .catch(() => {})
   }, [])
+
+  // Persist last session whenever messages change
+  useEffect(() => {
+    if (messages.length === 0) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId, messages, selectedIds, mode }))
+    } catch {}
+  }, [messages])
 
   // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // Reset session when selected personas or mode changes
-  useEffect(() => {
-    setSessionId(null)
-    setMessages([])
-    setActiveSources([])
-  }, [selectedIds, mode])
-
-  const togglePersona = useCallback((id: string) => {
+  // Clear source scope when user manually changes persona selection
+  const handleTogglePersona = useCallback((id: string) => {
+    setScopedSourceIds([])
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
     )
   }, [])
 
+
   const canChat = selectedIds.length > 0 && !isStreaming
+
+  function newConversation() {
+    setSessionId(null)
+    setMessages([])
+    setActiveSources([])
+    setActiveCitationIdx(null)
+    setStreamingContent('')
+    setScopedSourceIds([])
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
+  }
+
+  async function copyMessage(content: string, idx: number) {
+    await navigator.clipboard.writeText(content)
+    setCopiedIdx(idx)
+    setTimeout(() => setCopiedIdx(null), 2000)
+  }
 
   async function sendMessage() {
     const text = input.trim()
@@ -158,7 +212,11 @@ export default function ChatPage() {
         const res = await fetch('/api/chat/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ persona_ids: selectedIds, mode }),
+          body: JSON.stringify({
+            persona_ids: selectedIds,
+            mode,
+            ...(scopedSourceIds.length > 0 && { source_ids: scopedSourceIds }),
+          }),
         })
         const session = await res.json()
         sid = session.id
@@ -195,6 +253,10 @@ export default function ChatPage() {
 
           try {
             const parsed = JSON.parse(raw)
+            if (parsed.error) {
+              console.error('[Chat SSE error]', parsed.error)
+              throw new Error(parsed.error)
+            }
             if (parsed.token !== undefined) {
               fullContent += parsed.token
               setStreamingContent(fullContent)
@@ -203,7 +265,10 @@ export default function ChatPage() {
               finalSources = parsed.sources
               setActiveSources(parsed.sources)
             }
-          } catch {}
+          } catch (parseErr) {
+            console.error('[Chat SSE parse error]', parseErr, 'raw line:', raw)
+            throw parseErr
+          }
         }
       }
 
@@ -213,6 +278,7 @@ export default function ChatPage() {
       ])
       setStreamingContent('')
     } catch (err) {
+      console.error('[Chat error]', err)
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: 'Something went wrong. Please try again.' },
@@ -235,20 +301,35 @@ export default function ChatPage() {
       <ChatSidebar
         personas={personas}
         selectedIds={selectedIds}
-        onToggle={togglePersona}
+        onToggle={handleTogglePersona}
         onImport={() => setShowImport(true)}
+        activeTags={activeTags}
+        onTagsChange={setActiveTags}
       />
 
       {/* ── Center: Chat Canvas ────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
 
-        {/* Mode toggle */}
-        <div className="flex justify-center pt-4 pb-2 shrink-0">
+        {/* Mode toggle + session controls */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+          <div className="w-32">
+            {messages.length > 0 && (
+              <button
+                onClick={newConversation}
+                title="Start new conversation"
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-indigo-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-indigo-50"
+              >
+                <span className="material-symbols-rounded text-base">add_comment</span>
+                New Chat
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1 bg-[#f4f2ff] rounded-full p-1">
             {MODES.map(({ key, label, icon }) => (
               <button
                 key={key}
                 onClick={() => setMode(key)}
+                title={key === 'learn' ? 'Explain concepts and ideas' : key === 'advisor' ? 'Apply to your specific situation' : 'Strict accuracy with citations'}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
                   mode === key
                     ? 'bg-[#181a2b] text-white shadow-lg'
@@ -262,7 +343,31 @@ export default function ChatPage() {
               </button>
             ))}
           </div>
+          <div className="w-32 flex justify-end">
+            {messages.length > 0 && (
+              <span className="text-[10px] font-semibold text-slate-400 px-2 py-1.5">
+                {messages.length} message{messages.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Source scope banner */}
+        {scopedSourceIds.length > 0 && (
+          <div className="mx-4 mb-1 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2">
+            <span className="material-symbols-rounded text-indigo-500 text-base">filter_list</span>
+            <p className="text-xs text-indigo-700 font-semibold flex-1">
+              Scoped to {scopedSourceIds.length} video{scopedSourceIds.length !== 1 ? 's' : ''} — answers only use these transcripts
+            </p>
+            <button
+              onClick={() => setScopedSourceIds([])}
+              className="text-indigo-400 hover:text-indigo-700 transition-colors"
+              title="Remove scope, search all videos"
+            >
+              <span className="material-symbols-rounded text-base">close</span>
+            </button>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -275,12 +380,16 @@ export default function ChatPage() {
                 <p className="text-[#181a2b] font-semibold text-base">
                   {selectedIds.length === 0
                     ? 'Select a persona to start'
-                    : `Chat with ${selectedIds.length} persona${selectedIds.length > 1 ? 's' : ''}`}
+                    : scopedSourceIds.length > 0
+                      ? `${scopedSourceIds.length} video${scopedSourceIds.length !== 1 ? 's' : ''} selected`
+                      : `Chat with ${selectedIds.length} persona${selectedIds.length > 1 ? 's' : ''}`}
                 </p>
                 <p className="text-slate-400 text-sm mt-1">
                   {selectedIds.length === 0
                     ? 'Choose one or more personas from the left panel'
-                    : 'Ask anything — responses are grounded in real content'}
+                    : scopedSourceIds.length > 0
+                      ? 'Answers only use these specific videos'
+                      : 'Ask anything — responses are grounded in real content'}
                 </p>
               </div>
             )}
@@ -294,7 +403,7 @@ export default function ChatPage() {
                     </div>
                   </div>
                 ) : (
-                  <div>
+                  <div className="group">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center">
                         <span className="text-white text-[10px] font-black">AI</span>
@@ -302,17 +411,33 @@ export default function ChatPage() {
                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                         Persona Synthesis
                       </span>
+                      <button
+                        onClick={() => copyMessage(msg.content, i)}
+                        title="Copy message"
+                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-50"
+                      >
+                        <span className="material-symbols-rounded text-sm">
+                          {copiedIdx === i ? 'check' : 'content_copy'}
+                        </span>
+                        {copiedIdx === i ? 'Copied' : 'Copy'}
+                      </button>
                     </div>
-                    <div className="text-[15px] leading-[1.85] text-[#3d3a50] space-y-4">
-                      {msg.content.split('\n\n').map((para, j) => (
-                        <p key={j}>
-                          {renderCitations(para, msg.sources ?? [], (idx) => {
-                            setActiveSources(msg.sources ?? [])
-                            setActiveCitationIdx(idx)
-                          })}
-                        </p>
-                      ))}
-                    </div>
+                    {msg.content === 'Something went wrong. Please try again.' ? (
+                      <div className="flex items-center gap-3 bg-rose-50 rounded-xl px-4 py-3 border border-rose-100">
+                        <span className="material-symbols-rounded text-rose-400 text-base">error</span>
+                        <p className="text-rose-600 text-sm flex-1">Something went wrong. Please try again.</p>
+                        <button
+                          onClick={() => { setMessages((prev) => prev.slice(0, -1)); }}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-800 underline"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[15px] leading-[1.85] text-[#3d3a50] prose prose-sm prose-slate max-w-none prose-headings:text-[#181a2b] prose-headings:font-bold prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-4 prose-strong:text-[#181a2b]">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -338,8 +463,8 @@ export default function ChatPage() {
                     ))}
                   </span>
                 </div>
-                <div className="text-[15px] leading-[1.85] text-[#3d3a50]">
-                  {streamingContent}
+                <div className="text-[15px] leading-[1.85] text-[#3d3a50] prose prose-sm prose-slate max-w-none prose-headings:text-[#181a2b] prose-headings:font-bold prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-hr:my-4 prose-strong:text-[#181a2b]">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
                   <span className="inline-block w-0.5 h-4 bg-indigo-500 animate-pulse ml-0.5 align-middle" />
                 </div>
               </div>
