@@ -177,9 +177,10 @@ function ChatPageInner() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // Clear source scope when user manually changes persona selection
+  // When persona selection changes, invalidate the session so a new one is created
   const handleTogglePersona = useCallback((id: string) => {
     setScopedSourceIds([])
+    setSessionId(null)
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
     )
