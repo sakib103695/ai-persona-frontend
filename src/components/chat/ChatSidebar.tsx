@@ -57,7 +57,10 @@ export function ChatSidebar({ personas, selectedIds, onToggle, onImport, activeT
   const filtered = useMemo(() => {
     if (activeTags.length === 0) return personas
     return personas.filter((p) =>
-      activeTags.every((t) => (p.tags ?? []).includes(t)),
+      activeTags.every((t) =>
+        (p.tags ?? []).includes(t) ||
+        p.name.toLowerCase().includes(normalizeTag(t))
+      ),
     )
   }, [personas, activeTags])
 

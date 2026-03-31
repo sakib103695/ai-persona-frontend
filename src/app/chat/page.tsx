@@ -146,8 +146,9 @@ function ChatPageInner() {
 
     fetch('/api/personas')
       .then((r) => r.json())
-      .then((data: Persona[]) => {
-        setPersonas(data)
+      .then((data) => {
+        const list: Persona[] = Array.isArray(data) ? data : []
+        setPersonas(list)
         // URL params start a fresh scoped session — override restored state
         const personaParam = searchParams.get('persona')
         const sourcesParam = searchParams.get('sources')
