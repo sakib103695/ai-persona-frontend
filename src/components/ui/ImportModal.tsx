@@ -6,6 +6,8 @@ interface Props {
   onClose: () => void
   /** If provided, skip the import form and open directly in progress-view mode */
   viewPersonaId?: string
+  /** If provided, adds videos to this existing persona instead of creating new ones */
+  addToPersonaId?: string
 }
 
 type Tab = 'channel' | 'videos'
@@ -30,7 +32,7 @@ const STEP_LABELS: Record<string, string> = {
   complete: 'Finalizing persona profile',
 }
 
-export function ImportModal({ onClose, viewPersonaId }: Props) {
+export function ImportModal({ onClose, viewPersonaId, addToPersonaId }: Props) {
   const [tab, setTab] = useState<Tab>('channel')
   const [urls, setUrls] = useState('')
   const [importing, setImporting] = useState(false)
@@ -113,20 +115,37 @@ export function ImportModal({ onClose, viewPersonaId }: Props) {
     setImporting(true)
 
     try {
-      const res = await fetch('/api/sources/channel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls: lines }),
-      })
+      if (addToPersonaId) {
+        // Adding to an existing persona — process each URL
+        for (const url of lines) {
+          const res = await fetch('/api/sources/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ persona_id: addToPersonaId, url }),
+          })
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new Error(body.message || `Server error ${res.status}`)
+          }
+        }
+        setPersonaId(addToPersonaId)
+      } else {
+        // Creating new personas from channel URLs
+        const res = await fetch('/api/sources/channel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: lines }),
+        })
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.message || `Server error ${res.status}`)
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.message || `Server error ${res.status}`)
+        }
+
+        const data = await res.json()
+        const firstId = Array.isArray(data) ? data[0]?.persona_id : data.persona_id
+        setPersonaId(firstId ?? null)
       }
-
-      const data = await res.json()
-      const firstId = Array.isArray(data) ? data[0]?.persona_id : data.persona_id
-      setPersonaId(firstId ?? null)
     } catch (err: any) {
       setError(err.message || 'Failed to start import. Please try again.')
       setImporting(false)

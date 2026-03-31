@@ -1079,7 +1079,7 @@ export default function PersonaDetailPage() {
         </aside>
       </main>
 
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      {showImport && <ImportModal addToPersonaId={id} onClose={() => setShowImport(false)} />}
       {showProgress && <ImportModal viewPersonaId={id} onClose={() => setShowProgress(false)} />}
 
       {showDeletePersona && (
