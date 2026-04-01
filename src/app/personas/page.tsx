@@ -89,14 +89,18 @@ export default function PersonasPage() {
   async function handleExport() {
     setExporting(true)
     try {
-      const res = await fetch('/api/personas/export')
+      const ids = [...selected]
+      const url = ids.length > 0
+        ? `/api/personas/export?ids=${ids.join(',')}`
+        : '/api/personas/export'
+      const res = await fetch(url)
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+      const objectUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
+      a.href = objectUrl
       a.download = `persona-export-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
-      URL.revokeObjectURL(url)
+      URL.revokeObjectURL(objectUrl)
     } finally {
       setExporting(false)
     }
@@ -180,12 +184,14 @@ export default function PersonasPage() {
               </select>
               <button
                 onClick={handleExport}
-                disabled={exporting}
-                title="Export all data"
-                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-600 font-bold text-sm rounded-xl hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-50"
+                disabled={selected.size === 0 || exporting}
+                title={selected.size === 0 ? 'Select personas to export' : `Export ${selected.size} selected`}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-600 font-bold text-sm rounded-xl hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
               >
-                <span className="material-symbols-rounded text-base">{exporting ? 'sync' : 'download'}</span>
-                Export
+                <span className={`material-symbols-rounded text-base ${exporting ? 'animate-spin' : ''}`}>
+                  {exporting ? 'sync' : 'download'}
+                </span>
+                {exporting ? 'Exporting...' : `Export${selected.size > 0 ? ` (${selected.size})` : ''}`}
               </button>
               <button
                 onClick={handleImport}
