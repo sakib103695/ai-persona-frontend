@@ -43,6 +43,7 @@ export default function PersonasPage() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [selectAll, setSelectAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const load = () =>
@@ -81,6 +82,21 @@ export default function PersonasPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  async function handleBulkDelete() {
+    if (!confirm(`Delete ${selected.size} persona${selected.size !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      for (const id of selected) {
+        await fetch(`/api/personas/${id}`, { method: 'DELETE' })
+      }
+      setPersonas((prev) => prev.filter((p) => !selected.has(p.id)))
+      setSelected(new Set())
+      setSelectAll(false)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   function handleSelectAll() {
@@ -204,12 +220,22 @@ export default function PersonasPage() {
                   </span>
                 </label>
                 {selected.size > 0 && (
-                  <button
-                    onClick={() => { setSelected(new Set()); setSelectAll(false); }}
-                    className="text-xs text-slate-400 hover:text-slate-600"
-                  >
-                    Clear selection
-                  </button>
+                  <>
+                    <button
+                      onClick={() => { setSelected(new Set()); setSelectAll(false); }}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      Clear selection
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={deleting}
+                      className="flex items-center gap-1 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <span className="material-symbols-rounded text-sm">delete</span>
+                      {deleting ? 'Deleting...' : `Delete ${selected.size}`}
+                    </button>
+                  </>
                 )}
               </div>
 
