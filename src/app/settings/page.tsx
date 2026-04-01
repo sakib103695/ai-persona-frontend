@@ -48,6 +48,11 @@ export default function SettingsPage() {
   const [rebuilding, setRebuilding] = useState(false)
   const [rebuildMsg, setRebuildMsg] = useState('')
 
+  // Data transfer
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [transferMsg, setTransferMsg] = useState('')
+
   // Model settings
   const [currentModel, setCurrentModel] = useState<string>('')
   const [models, setModels] = useState<OpenRouterModel[]>([])
@@ -172,6 +177,55 @@ export default function SettingsPage() {
     } finally {
       setRebuilding(false)
     }
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    setTransferMsg('')
+    try {
+      const res = await fetch('/api/personas/export')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `persona-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setTransferMsg('Export downloaded!')
+    } catch {
+      setTransferMsg('Export failed')
+    } finally {
+      setExporting(false)
+      setTimeout(() => setTransferMsg(''), 5000)
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      setImporting(true)
+      setTransferMsg('')
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        const res = await fetch('/api/personas/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        const result = await res.json()
+        setTransferMsg(`Imported ${result.personas} personas, ${result.sources} sources, ${result.chunks} chunks`)
+      } catch (e: any) {
+        setTransferMsg(`Import failed: ${e.message}`)
+      } finally {
+        setImporting(false)
+      }
+    }
+    input.click()
   }
 
   const filteredModels = models.filter((m) =>
@@ -405,6 +459,44 @@ export default function SettingsPage() {
           <Row label="Default Mode" value="Learn" sub="Can be changed per session in the chat interface" />
           <Row label="Max History" value="20 messages" sub="Prior messages included for conversation context" />
           <Row label="Streaming" value="Enabled" sub="Responses stream token by token" />
+        </Section>
+
+        {/* Data Transfer */}
+        <Section title="Data Transfer">
+          <p className="text-xs text-slate-400 mb-4">
+            Export all personas, sources, and knowledge chunks as a JSON file. Import on another instance to sync data.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-500 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {exporting ? (
+                <span className="material-symbols-rounded text-base animate-spin">sync</span>
+              ) : (
+                <span className="material-symbols-rounded text-base">download</span>
+              )}
+              {exporting ? 'Exporting...' : 'Export All Data'}
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-500 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {importing ? (
+                <span className="material-symbols-rounded text-base animate-spin">sync</span>
+              ) : (
+                <span className="material-symbols-rounded text-base">upload</span>
+              )}
+              {importing ? 'Importing...' : 'Import Data'}
+            </button>
+          </div>
+          {transferMsg && (
+            <p className={`text-xs font-bold mt-3 ${transferMsg.includes('fail') ? 'text-rose-500' : 'text-emerald-600'}`}>
+              {transferMsg}
+            </p>
+          )}
         </Section>
 
         {/* Danger Zone */}
