@@ -44,6 +44,8 @@ export default function PersonasPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     const load = () =>
@@ -82,6 +84,50 @@ export default function PersonasPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/personas/export')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `persona-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      setImporting(true)
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        const res = await fetch('/api/personas/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        const result = await res.json()
+        alert(`Imported ${result.personas} personas, ${result.sources} sources, ${result.chunks} chunks`)
+        window.location.reload()
+      } catch (e: any) {
+        alert(`Import failed: ${e.message}`)
+      } finally {
+        setImporting(false)
+      }
+    }
+    input.click()
   }
 
   async function handleBulkDelete() {
@@ -133,11 +179,29 @@ export default function PersonasPage() {
                 <option value="name">Name A–Z</option>
               </select>
               <button
+                onClick={handleExport}
+                disabled={exporting}
+                title="Export all data"
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 text-slate-600 font-bold text-sm rounded-xl hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <span className="material-symbols-rounded text-base">{exporting ? 'sync' : 'download'}</span>
+                Export
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing}
+                title="Import data from file"
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-500 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <span className="material-symbols-rounded text-base">{importing ? 'sync' : 'upload'}</span>
+                Import
+              </button>
+              <button
                 onClick={() => setShowImport(true)}
                 className="flex items-center gap-2 brand-gradient text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
               >
                 <span className="material-symbols-rounded text-base">add</span>
-                Import
+                New
               </button>
             </div>
           </div>
